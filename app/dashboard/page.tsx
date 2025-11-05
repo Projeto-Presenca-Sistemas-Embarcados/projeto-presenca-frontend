@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+// Link not used directly here after refactor
 import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/use-auth";
 import {
@@ -18,6 +18,9 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import Button from "../../components/ui/button";
+import StudentsPicker from "../../components/dashboard/StudentsPicker";
+import RecurrenceForm from "../../components/dashboard/RecurrenceForm";
+import LessonsGrid from "../../components/dashboard/LessonsGrid";
 
 export default function DashboardPage() {
   const { session, loading, error } = useAuth(true);
@@ -81,92 +84,43 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="space-y-2 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Adicionar alunos</div>
-                <div className="text-xs text-gray-600">
-                  {selectedStudentIds.length} selecionado(s)
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Buscar por nome ou tag"
-                  className="w-full rounded border px-3 py-2"
-                  value={studentsQuery}
-                  onChange={(e) => setStudentsQuery(e.target.value)}
-                  onFocus={async () => {
-                    if (allStudents !== null) return;
-                    try {
-                      const list = await getStudents();
-                      setAllStudents(list);
-                    } catch (err) {
-                      const msg =
-                        err instanceof Error
-                          ? err.message
-                          : "Falha ao carregar alunos";
-                      setActionMsg(msg);
-                    }
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedStudentIds([])}
-                >
-                  Limpar seleção
-                </Button>
-              </div>
-              <div className="max-h-56 overflow-auto border rounded p-2 bg-white">
-                {!allStudents || allStudents.length === 0 ? (
-                  <div className="text-sm text-gray-600">
-                    {allStudents === null
-                      ? "Clique no campo para carregar a lista..."
-                      : "Nenhum aluno disponível."}
-                  </div>
-                ) : (
-                  <div className="grid gap-1">
-                    {allStudents
-                      .filter((s) => {
-                        const q = studentsQuery.trim().toLowerCase();
-                        if (!q) return true;
-                        return (
-                          s.name.toLowerCase().includes(q) ||
-                          (s.tagId ?? "").toLowerCase().includes(q)
-                        );
-                      })
-                      .map((s) => {
-                        const checked = selectedStudentIds.includes(s.id);
-                        return (
-                          <label
-                            key={String(s.id)}
-                            className="flex items-center gap-2 text-sm cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                setSelectedStudentIds((prev) =>
-                                  e.target.checked
-                                    ? [...new Set([...prev, s.id])]
-                                    : prev.filter((id) => id !== s.id)
-                                );
-                              }}
-                            />
-                            <span className="font-medium">{s.name}</span>
-                            <span className="text-gray-600">
-                              {s.tagId ? `(${s.tagId})` : ""}
-                            </span>
-                          </label>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
+              <StudentsPicker
+                allStudents={allStudents}
+                onLoadAll={async () => {
+                  if (allStudents !== null) return;
+                  try {
+                    const list = await getStudents();
+                    setAllStudents(list);
+                  } catch (err) {
+                    const msg =
+                      err instanceof Error
+                        ? err.message
+                        : "Falha ao carregar alunos";
+                    setActionMsg(msg);
+                  }
+                }}
+                query={studentsQuery}
+                setQuery={setStudentsQuery}
+                selectedIds={selectedStudentIds}
+                setSelectedIds={(updater) => setSelectedStudentIds(updater)}
+              />
             </div>
-            <form
-              className="grid gap-3 md:grid-cols-2"
-              onSubmit={async (e) => {
-                e.preventDefault();
+            <RecurrenceForm
+              from={from}
+              to={to}
+              setFrom={setFrom}
+              setTo={setTo}
+              subject={subject}
+              setSubject={setSubject}
+              room={room}
+              setRoom={setRoom}
+              startHour={startHour}
+              setStartHour={setStartHour}
+              endHour={endHour}
+              setEndHour={setEndHour}
+              weekdays={weekdays}
+              setWeekdays={setWeekdays}
+              onSubmit={async () => {
                 setActionMsg(null);
                 if (!session?.teacherId) return;
                 if (!from || !to) {
@@ -196,7 +150,6 @@ export default function DashboardPage() {
                     endHour,
                     weekdays,
                   });
-                  // Se houver alunos selecionados, associar a cada aula criada
                   const createdLessons = resp.lessons ?? [];
                   let assocSuccess = 0;
                   let assocFail = 0;
@@ -228,99 +181,7 @@ export default function DashboardPage() {
                   setActionMsg(msg);
                 }
               }}
-            >
-              <div>
-                <label className="block text-sm mb-1">De (YYYY-MM-DD)</label>
-                <input
-                  type="date"
-                  className="w-full rounded border px-3 py-2"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Até (YYYY-MM-DD)</label>
-                <input
-                  type="date"
-                  className="w-full rounded border px-3 py-2"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Nome da aula</label>
-                <input
-                  type="text"
-                  placeholder="Ex.: Matemática"
-                  className="w-full rounded border px-3 py-2"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Sala</label>
-                <input
-                  type="text"
-                  placeholder="Ex.: 101"
-                  className="w-full rounded border px-3 py-2"
-                  value={room}
-                  onChange={(e) => setRoom(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Início (HH:mm)</label>
-                <input
-                  type="time"
-                  className="w-full rounded border px-3 py-2"
-                  value={startHour}
-                  onChange={(e) => setStartHour(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Fim (HH:mm)</label>
-                <input
-                  type="time"
-                  className="w-full rounded border px-3 py-2"
-                  value={endHour}
-                  onChange={(e) => setEndHour(e.target.value)}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm mb-2">Dias da semana</label>
-                <div className="flex flex-wrap gap-2 text-sm">
-                  {[
-                    { v: 0, l: "Dom" },
-                    { v: 1, l: "Seg" },
-                    { v: 2, l: "Ter" },
-                    { v: 3, l: "Qua" },
-                    { v: 4, l: "Qui" },
-                    { v: 5, l: "Sex" },
-                    { v: 6, l: "Sáb" },
-                  ].map((d) => (
-                    <label
-                      key={d.v}
-                      className="inline-flex items-center gap-1 border rounded px-2 py-1 bg-white cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={weekdays.includes(d.v)}
-                        onChange={(e) =>
-                          setWeekdays((prev) =>
-                            e.target.checked
-                              ? [...new Set([...prev, d.v])].sort()
-                              : prev.filter((x) => x !== d.v)
-                          )
-                        }
-                      />
-                      {d.l}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <Button type="submit">Gerar</Button>
-              </div>
-            </form>
+            />
           </CardContent>
         </Card>
       )}
@@ -329,44 +190,7 @@ export default function DashboardPage() {
           {fetchError}
         </div>
       )}
-      {!lessons || lessons.length === 0 ? (
-        <Card>
-          <CardContent>
-            <p className="text-gray-700">Nenhuma aula encontrada.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {lessons.map((l) => (
-            <Card key={l.id}>
-              <CardHeader>
-                <CardTitle>
-                  {l.subject} — {l.room}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-600">
-                  {new Date(l.startTime).toLocaleString()} —{" "}
-                  {new Date(l.endTime).toLocaleString()}
-                </div>
-                <div className="text-sm mt-2">
-                  Status:{" "}
-                  {l.opened ? (
-                    <span className="text-green-700">Aberta</span>
-                  ) : (
-                    <span className="text-gray-700">Fechada</span>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <Link href={`/lessons/${l.id}`}>
-                    <Button size="sm">Ver detalhes</Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <LessonsGrid lessons={lessons} />
     </main>
   );
 }

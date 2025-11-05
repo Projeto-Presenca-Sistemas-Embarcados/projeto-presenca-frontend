@@ -16,13 +16,12 @@ import {
 } from "../../../lib/api";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/use-auth";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
-import Button from "../../../components/ui/button";
+import { Card, CardContent } from "../../../components/ui/card";
+// Button not used directly here; used within child components
+import LessonHeaderCard from "../../../components/lessons/LessonHeaderCard";
+import LessonEditForm from "../../../components/lessons/LessonEditForm";
+import AttendanceList from "../../../components/lessons/AttendanceList";
+import AttendanceExportButton from "../../../components/lessons/AttendanceExportButton";
 
 export default function LessonDetailPage() {
   const { session, loading, error } = useAuth(true);
@@ -42,53 +41,7 @@ export default function LessonDetailPage() {
   const [roomEdit, setRoomEdit] = useState("");
   const [showEdit, setShowEdit] = useState(false);
 
-  function normalizeStudentRow(st: LessonStudent) {
-    return {
-      // Prefer nested student id; fall back to potential linkage fields
-      id: (st.student?.id as number | string) ?? st.studentId ?? st.id,
-      name: (st.student?.name as string) ?? "",
-      tagId: st.student?.tagId ?? st.tagId,
-      present: st.present ?? false,
-    };
-  }
-
-  function formatYmd(dateStr?: string) {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-
-  function exportAttendanceCsv() {
-    if (!lessonStudents || lessonStudents.length === 0) return;
-    const headers = ["id", "name", "status"];
-    const lines = [headers.join(",")];
-    const rows = lessonStudents.map(normalizeStudentRow);
-    for (const s of rows) {
-      const row = [
-        String(s.id).replace(/[\,\n]/g, " "),
-        String(s.name).replace(/[\,\n]/g, " "),
-        s.present ? "Presente" : "Falta",
-      ];
-      lines.push(row.join(","));
-    }
-    const csv = lines.join("\n");
-    // Prepend UTF-8 BOM to ensure Excel and other tools detect encoding correctly
-    const bom = "\uFEFF";
-    const blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `presencas-aula-${lesson?.subject}-${formatYmd(
-      lesson?.startTime
-    )}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
+  // CSV export moved into AttendanceExportButton component
 
   useEffect(() => {
     if (!lessonId || Number.isNaN(lessonId)) return;
@@ -212,132 +165,43 @@ export default function LessonDetailPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {lesson.subject} — {lesson.room}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-gray-600">
-              {new Date(lesson.startTime).toLocaleString()} —{" "}
-              {new Date(lesson.endTime).toLocaleString()}
-            </div>
-            <div className="flex items-center gap-3 mt-3">
-              <span>
-                Status:{" "}
-                {lesson.opened ? (
-                  <span className="text-green-700">Aberta</span>
-                ) : (
-                  <span className="text-gray-700">Fechada</span>
-                )}
-              </span>
-              <Button onClick={handleOpenClose} disabled={busy} size="sm">
-                {lesson.opened ? "Fechar aula" : "Abrir aula"}
-              </Button>
-              <Button
-                onClick={() => setShowEdit((v) => !v)}
-                variant="outline"
-                size="sm"
-              >
-                {showEdit ? "Fechar edição" : "Editar"}
-              </Button>
-            </div>
-            {showEdit && (
-              <div className="mt-4 space-y-2">
-                {editMsg && (
-                  <div className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
-                    {editMsg}
-                  </div>
-                )}
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm mb-1">Nome da aula</label>
-                    <input
-                      type="text"
-                      className="w-full rounded border px-3 py-2"
-                      value={subjectEdit}
-                      onChange={(e) => setSubjectEdit(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1">Sala</label>
-                    <input
-                      type="text"
-                      className="w-full rounded border px-3 py-2"
-                      value={roomEdit}
-                      onChange={(e) => setRoomEdit(e.target.value)}
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex items-center gap-2">
-                    <Button onClick={handleSaveEdits} disabled={busy}>
-                      Salvar alterações
-                    </Button>
-                    <Button
-                      onClick={handleDelete}
-                      disabled={busy}
-                      variant="outline"
-                    >
-                      Excluir aula
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <LessonHeaderCard
+          lesson={lesson}
+          busy={busy}
+          onToggleOpen={handleOpenClose}
+          showEdit={showEdit}
+          onToggleEdit={() => setShowEdit((v) => !v)}
+        />
       )}
 
       <section>
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium">Alunos</h2>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportAttendanceCsv}>
-              Exportar presenças (CSV)
-            </Button>
+            <AttendanceExportButton
+              lesson={lesson}
+              lessonStudents={lessonStudents}
+              size="sm"
+              variant="outline"
+              className="mb-2"
+            />
           </div>
         </div>
-        {!lessonStudents || lessonStudents.length === 0 ? (
-          <Card>
-            <CardContent>
-              <p className="text-gray-700">Nenhum aluno nesta aula.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {lessonStudents.map((st) => (
-              <Card key={st.student.id}>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{st.student.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {st.student.tagId ? `TAG: ${st.student.tagId}` : ""}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          st.present ? "text-green-700" : "text-gray-700"
-                        }
-                      >
-                        {st.present ? "Presente" : "Falta"}
-                      </span>
-                      <Button
-                        onClick={() => togglePresence(st)}
-                        variant="outline"
-                        size="sm"
-                      >
-                        {st.present ? "Marcar falta" : "Marcar presença"}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        <AttendanceList items={lessonStudents} onToggle={togglePresence} />
       </section>
+
+      {showEdit && (
+        <LessonEditForm
+          subject={subjectEdit}
+          room={roomEdit}
+          onChangeSubject={setSubjectEdit}
+          onChangeRoom={setRoomEdit}
+          onSave={handleSaveEdits}
+          onDelete={handleDelete}
+          busy={busy}
+          editMsg={editMsg}
+        />
+      )}
     </main>
   );
 }
