@@ -7,14 +7,18 @@ import { useEffect, useState } from "react";
 
 export default function Navbar() {
   const router = useRouter();
-  const [logged, setLogged] = useState(
-    () => !!getAuthSession()?.isAuthenticated
-  );
+  // Start with a stable SSR value and hydrate after mount to avoid mismatches
+  const [logged, setLogged] = useState(false);
 
   useEffect(() => {
-    const onStorage = () => setLogged(!!getAuthSession()?.isAuthenticated);
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    // Hydrate client-side auth state after mount (defer to next tick to satisfy lint rule)
+    const update = () => setLogged(!!getAuthSession()?.isAuthenticated);
+    const t = window.setTimeout(update, 0);
+    window.addEventListener("storage", update);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("storage", update);
+    };
   }, []);
 
   function handleLogout() {

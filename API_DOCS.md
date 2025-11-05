@@ -54,6 +54,42 @@ POST /lessons/:id/open
 POST /lessons/:id/close
 ```
 
+#### Atualizar uma aula
+
+```
+PUT /lessons/:id
+```
+
+Body (qualquer combinação dos campos abaixo):
+
+```json
+{
+  "room": "Sala 102",
+  "subject": "Física",
+  "startTime": "2025-11-10T08:00:00Z",
+  "endTime": "2025-11-10T10:00:00Z"
+}
+```
+
+Respostas de erro:
+
+- 404: `{ "error": "Aula não encontrada" }`
+- 400: Erro de validação (campos inválidos)
+
+#### Excluir uma aula
+
+```
+DELETE /lessons/:id
+```
+
+Notas:
+
+- Exclui a aula e suas presenças associadas.
+
+Respostas de erro:
+
+- 404: `{ "error": "Aula não encontrada" }`
+
 #### Gerar aulas recorrentes por intervalo
 
 ```
@@ -105,6 +141,34 @@ Resposta (201):
 ```
 GET /lessons/:id/students
 ```
+
+#### Adicionar aluno a uma aula
+
+```
+POST /lessons/:id/students
+```
+
+Body:
+
+```json
+{ "studentId": 1 }
+```
+
+Respostas:
+
+- 201: retorna a associação criada (lessonStudent)
+- 404: Aula não encontrada / Aluno não encontrado
+
+#### Remover aluno de uma aula
+
+```
+DELETE /lessons/:id/students/:studentId
+```
+
+Respostas:
+
+- 200: `{ "success": true }`
+- 404: Associação não encontrada ou aula inexistente
 
 #### Marcar presença de um aluno pela tag (RFID/NFC)
 

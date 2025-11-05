@@ -31,13 +31,62 @@ export default function LessonDetailPage() {
   const lessonId = useMemo(() => Number(params?.id), [params]);
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [students, setStudents] = useState<LessonStudent[] | null>(null);
+  // LessonStudent holds attendance + nested student data
+  const [lessonStudents, setLessonStudents] = useState<LessonStudent[] | null>(
+    null
+  );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
   const [editMsg, setEditMsg] = useState<string | null>(null);
   const [subjectEdit, setSubjectEdit] = useState("");
   const [roomEdit, setRoomEdit] = useState("");
   const [showEdit, setShowEdit] = useState(false);
+
+  function normalizeStudentRow(st: LessonStudent) {
+    return {
+      // Prefer nested student id; fall back to potential linkage fields
+      id: (st.student?.id as number | string) ?? st.studentId ?? st.id,
+      name: (st.student?.name as string) ?? "",
+      tagId: st.student?.tagId ?? st.tagId,
+      present: st.present ?? false,
+    };
+  }
+
+  function formatYmd(dateStr?: string) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function exportAttendanceCsv() {
+    if (!lessonStudents || lessonStudents.length === 0) return;
+    const headers = ["id", "name", "status"];
+    const lines = [headers.join(",")];
+    const rows = lessonStudents.map(normalizeStudentRow);
+    for (const s of rows) {
+      const row = [
+        String(s.id).replace(/[\,\n]/g, " "),
+        String(s.name).replace(/[\,\n]/g, " "),
+        s.present ? "Presente" : "Falta",
+      ];
+      lines.push(row.join(","));
+    }
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `presencas-aula-${lesson?.subject}-${formatYmd(
+      lesson?.startTime
+    )}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     if (!lessonId || Number.isNaN(lessonId)) return;
@@ -49,7 +98,7 @@ export default function LessonDetailPage() {
           getLessonStudents(lessonId),
         ]);
         setLesson(l);
-        setStudents(s);
+        setLessonStudents(s);
         setSubjectEdit(l.subject ?? "");
         setRoomEdit(l.room ?? "");
       } catch (e) {
@@ -63,12 +112,12 @@ export default function LessonDetailPage() {
     if (!lesson) return;
     setBusy(true);
     try {
-      if (lesson.isOpen) {
+      if (lesson.opened) {
         await closeLesson(lesson.id);
-        setLesson({ ...lesson, isOpen: false });
+        setLesson({ ...lesson, opened: false });
       } else {
         await openLesson(lesson.id);
-        setLesson({ ...lesson, isOpen: true });
+        setLesson({ ...lesson, opened: true });
       }
     } catch (e) {
       setFetchError(
@@ -113,23 +162,24 @@ export default function LessonDetailPage() {
     }
   }
 
-  async function togglePresence(student: LessonStudent) {
+  async function togglePresence(ls: LessonStudent) {
     if (!lesson) return;
-    const newValue = !student.present;
-    setStudents(
+    const newValue = !ls.present;
+    // optimistic update by nested student id
+    setLessonStudents(
       (prev) =>
         prev?.map((s) =>
-          s.id === student.id ? { ...s, present: newValue } : s
+          s.student.id === ls.student.id ? { ...s, present: newValue } : s
         ) ?? null
     );
     try {
-      await markAttendance(lesson.id, student.id, newValue);
+      await markAttendance(lesson.id, ls.student.id, newValue);
     } catch (e) {
-      // rollback
-      setStudents(
+      // rollback using the same identity (nested student id)
+      setLessonStudents(
         (prev) =>
           prev?.map((s) =>
-            s.id === student.id ? { ...s, present: !newValue } : s
+            s.student.id === ls.student.id ? { ...s, present: !newValue } : s
           ) ?? null
       );
       setFetchError(e instanceof Error ? e.message : "Erro ao marcar presença");
@@ -174,14 +224,14 @@ export default function LessonDetailPage() {
             <div className="flex items-center gap-3 mt-3">
               <span>
                 Status:{" "}
-                {lesson.isOpen ? (
+                {lesson.opened ? (
                   <span className="text-green-700">Aberta</span>
                 ) : (
                   <span className="text-gray-700">Fechada</span>
                 )}
               </span>
               <Button onClick={handleOpenClose} disabled={busy} size="sm">
-                {lesson.isOpen ? "Fechar aula" : "Abrir aula"}
+                {lesson.opened ? "Fechar aula" : "Abrir aula"}
               </Button>
               <Button
                 onClick={() => setShowEdit((v) => !v)}
@@ -237,8 +287,15 @@ export default function LessonDetailPage() {
       )}
 
       <section>
-        <h2 className="text-xl font-medium">Alunos</h2>
-        {!students || students.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-medium">Alunos</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportAttendanceCsv}>
+              Exportar presenças (CSV)
+            </Button>
+          </div>
+        </div>
+        {!lessonStudents || lessonStudents.length === 0 ? (
           <Card>
             <CardContent>
               <p className="text-gray-700">Nenhum aluno nesta aula.</p>
@@ -246,7 +303,7 @@ export default function LessonDetailPage() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {students.map((st) => (
+            {lessonStudents.map((st) => (
               <Card key={st.student.id}>
                 <CardContent>
                   <div className="flex items-center justify-between">

@@ -6,7 +6,10 @@ import { useAuth } from "../../lib/use-auth";
 import {
   getLessonsByTeacher,
   generateRecurringLessons,
+  getStudents,
+  addStudentToLesson,
   type Lesson,
+  type Student,
 } from "../../lib/api";
 import {
   Card,
@@ -29,6 +32,12 @@ export default function DashboardPage() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [room, setRoom] = useState("");
+  // seleção de alunos para associar às ocorrências
+  const [allStudents, setAllStudents] = useState<Student[] | null>(null);
+  const [studentsQuery, setStudentsQuery] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<
+    Array<string | number>
+  >([]);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +80,89 @@ export default function DashboardPage() {
                 {actionMsg}
               </div>
             )}
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Adicionar alunos</div>
+                <div className="text-xs text-gray-600">
+                  {selectedStudentIds.length} selecionado(s)
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou tag"
+                  className="w-full rounded border px-3 py-2"
+                  value={studentsQuery}
+                  onChange={(e) => setStudentsQuery(e.target.value)}
+                  onFocus={async () => {
+                    if (allStudents !== null) return;
+                    try {
+                      const list = await getStudents();
+                      setAllStudents(list);
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error
+                          ? err.message
+                          : "Falha ao carregar alunos";
+                      setActionMsg(msg);
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedStudentIds([])}
+                >
+                  Limpar seleção
+                </Button>
+              </div>
+              <div className="max-h-56 overflow-auto border rounded p-2 bg-white">
+                {!allStudents || allStudents.length === 0 ? (
+                  <div className="text-sm text-gray-600">
+                    {allStudents === null
+                      ? "Clique no campo para carregar a lista..."
+                      : "Nenhum aluno disponível."}
+                  </div>
+                ) : (
+                  <div className="grid gap-1">
+                    {allStudents
+                      .filter((s) => {
+                        const q = studentsQuery.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          s.name.toLowerCase().includes(q) ||
+                          (s.tagId ?? "").toLowerCase().includes(q)
+                        );
+                      })
+                      .map((s) => {
+                        const checked = selectedStudentIds.includes(s.id);
+                        return (
+                          <label
+                            key={String(s.id)}
+                            className="flex items-center gap-2 text-sm cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedStudentIds((prev) =>
+                                  e.target.checked
+                                    ? [...new Set([...prev, s.id])]
+                                    : prev.filter((id) => id !== s.id)
+                                );
+                              }}
+                            />
+                            <span className="font-medium">{s.name}</span>
+                            <span className="text-gray-600">
+                              {s.tagId ? `(${s.tagId})` : ""}
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
             <form
               className="grid gap-3 md:grid-cols-2"
               onSubmit={async (e) => {
@@ -104,11 +196,32 @@ export default function DashboardPage() {
                     endHour,
                     weekdays,
                   });
+                  // Se houver alunos selecionados, associar a cada aula criada
+                  const createdLessons = resp.lessons ?? [];
+                  let assocSuccess = 0;
+                  let assocFail = 0;
+                  if (createdLessons.length && selectedStudentIds.length) {
+                    for (const l of createdLessons) {
+                      const ops = selectedStudentIds
+                        .map((id) => allStudents?.find((s) => s.id === id))
+                        .filter((s): s is Student => Boolean(s))
+                        .map((s) => addStudentToLesson(l.id, s.id));
+                      const results = await Promise.allSettled(ops);
+                      results.forEach((r) =>
+                        r.status === "fulfilled" ? assocSuccess++ : assocFail++
+                      );
+                    }
+                  }
                   setActionMsg(
-                    `Criadas: ${resp.createdCount} | Puladas: ${resp.skippedCount}`
+                    `Criadas: ${resp.createdCount} | Puladas: ${resp.skippedCount}` +
+                      (selectedStudentIds.length
+                        ? ` | Alunos associados: ${assocSuccess}` +
+                          (assocFail ? ` (falhas: ${assocFail})` : "")
+                        : "")
                   );
                   const data = await getLessonsByTeacher(session.teacherId);
                   setLessons(data);
+                  setSelectedStudentIds([]);
                 } catch (e) {
                   const msg =
                     e instanceof Error ? e.message : "Erro ao gerar aulas";
@@ -238,7 +351,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-sm mt-2">
                   Status:{" "}
-                  {l.isOpen ? (
+                  {l.opened ? (
                     <span className="text-green-700">Aberta</span>
                   ) : (
                     <span className="text-gray-700">Fechada</span>

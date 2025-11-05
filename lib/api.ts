@@ -22,7 +22,7 @@ export type Lesson = {
   teacherId: number;
   startTime: string;
   endTime: string;
-  isOpen?: boolean; // assumido pelo fluxo de open/close
+  opened?: boolean; // assumido pelo fluxo de open/close
 };
 
 export type LessonStudent = {
@@ -36,6 +36,13 @@ export type LessonStudent = {
     name: string;
     tagId?: string;
   };
+};
+
+// Students (lista geral)
+export type Student = {
+  id: number | string;
+  name: string;
+  tagId?: string;
 };
 
 const BASE =
@@ -133,6 +140,10 @@ export async function markAttendanceByTag(
   });
 }
 
+export async function getStudents(): Promise<Student[]> {
+  return request<Student[]>(`/students`, { method: "GET" });
+}
+
 // Update/Delete de aulas (assumindo API REST padrão)
 export async function updateLesson(
   id: number,
@@ -178,5 +189,26 @@ export async function generateRecurringLessons(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+  });
+}
+
+// Associar/Remover alunos em uma aula
+export async function addStudentToLesson(
+  lessonId: number,
+  studentId: number | string
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/lessons/${lessonId}/students`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ studentId }),
+  });
+}
+
+export async function removeStudentFromLesson(
+  lessonId: number,
+  studentId: number | string
+): Promise<{ success?: boolean } | Record<string, unknown>> {
+  return request(`/lessons/${lessonId}/students/${studentId}`, {
+    method: "DELETE",
   });
 }
