@@ -27,9 +27,15 @@ export type Lesson = {
 
 export type LessonStudent = {
   id: number;
-  name: string;
+  lessonId: number;
+  studentId: number;
   present?: boolean;
   tagId?: string;
+  student: {
+    id: number;
+    name: string;
+    tagId?: string;
+  };
 };
 
 const BASE =
@@ -124,5 +130,53 @@ export async function markAttendanceByTag(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tagId }),
+  });
+}
+
+// Update/Delete de aulas (assumindo API REST padrão)
+export async function updateLesson(
+  id: number,
+  payload: Partial<Pick<Lesson, "room" | "subject" | "startTime" | "endTime">>
+): Promise<Lesson> {
+  return request<Lesson>(`/lessons/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteLesson(
+  id: number
+): Promise<{ message?: string } | Record<string, unknown>> {
+  return request(`/lessons/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// Recorrência de aulas
+export type GenerateRecurringInput = {
+  room: string;
+  subject: string;
+  teacherId: number;
+  from: string; // YYYY-MM-DD
+  to: string; // YYYY-MM-DD
+  startHour: string; // HH:mm
+  endHour: string; // HH:mm
+  weekdays: number[]; // 0..6
+};
+
+export type GenerateRecurringResponse = {
+  createdCount: number;
+  skippedCount: number;
+  lessons?: Lesson[];
+};
+
+export async function generateRecurringLessons(
+  input: GenerateRecurringInput
+): Promise<GenerateRecurringResponse> {
+  return request<GenerateRecurringResponse>(`/lessons/recurring/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
   });
 }

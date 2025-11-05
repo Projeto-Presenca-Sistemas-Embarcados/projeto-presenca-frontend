@@ -54,6 +54,52 @@ POST /lessons/:id/open
 POST /lessons/:id/close
 ```
 
+#### Gerar aulas recorrentes por intervalo
+
+```
+POST /lessons/recurring/generate
+```
+
+Body:
+
+```json
+{
+  "room": "Sala 101",
+  "subject": "Matemática",
+  "teacherId": 1,
+  "from": "2025-11-01",
+  "to": "2025-12-31",
+  "startHour": "08:00",
+  "endHour": "10:00",
+  "weekdays": [1, 3, 5]
+}
+```
+
+Notas:
+
+- weekdays usa 0..6 (0=Domingo ... 6=Sábado).
+- Os horários são considerados em UTC ao salvar no banco.
+- O serviço ignora ocorrências já existentes (mesmo teacherId + startTime) e retorna contagem criada/pulada.
+
+Resposta (201):
+
+```json
+{
+  "createdCount": 6,
+  "skippedCount": 0,
+  "lessons": [
+    {
+      "id": 10,
+      "room": "Sala 101",
+      "subject": "Matemática",
+      "teacher": { "id": 1, "name": "..." },
+      "startTime": "...",
+      "endTime": "..."
+    }
+  ]
+}
+```
+
 #### Listar alunos de uma aula
 
 ```

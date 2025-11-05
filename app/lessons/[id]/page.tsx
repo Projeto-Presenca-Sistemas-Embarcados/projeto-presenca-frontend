@@ -9,9 +9,12 @@ import {
   openLesson,
   closeLesson,
   markAttendance,
+  updateLesson,
+  deleteLesson,
   type Lesson,
   type LessonStudent,
 } from "../../../lib/api";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/use-auth";
 import {
   Card,
@@ -24,12 +27,16 @@ import Button from "../../../components/ui/button";
 export default function LessonDetailPage() {
   const { session, loading, error } = useAuth(true);
   const params = useParams();
+  const router = useRouter();
   const lessonId = useMemo(() => Number(params?.id), [params]);
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [students, setStudents] = useState<LessonStudent[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
+  const [editMsg, setEditMsg] = useState<string | null>(null);
+  const [subjectEdit, setSubjectEdit] = useState("");
+  const [roomEdit, setRoomEdit] = useState("");
 
   useEffect(() => {
     if (!lessonId || Number.isNaN(lessonId)) return;
@@ -42,6 +49,8 @@ export default function LessonDetailPage() {
         ]);
         setLesson(l);
         setStudents(s);
+        setSubjectEdit(l.subject ?? "");
+        setRoomEdit(l.room ?? "");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Erro ao carregar aula";
         setFetchError(msg);
@@ -64,6 +73,40 @@ export default function LessonDetailPage() {
       setFetchError(
         e instanceof Error ? e.message : "Erro ao alterar status da aula"
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSaveEdits() {
+    if (!lesson) return;
+    setBusy(true);
+    setEditMsg(null);
+    try {
+      const updated = await updateLesson(lesson.id, {
+        subject: subjectEdit.trim(),
+        room: roomEdit.trim(),
+      });
+      setLesson(updated);
+      setEditMsg("Alterações salvas.");
+    } catch (e) {
+      setEditMsg(e instanceof Error ? e.message : "Erro ao salvar alterações");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!lesson) return;
+    const ok = window.confirm("Tem certeza que deseja excluir esta aula?");
+    if (!ok) return;
+    setBusy(true);
+    setEditMsg(null);
+    try {
+      await deleteLesson(lesson.id);
+      router.push("/dashboard");
+    } catch (e) {
+      setEditMsg(e instanceof Error ? e.message : "Erro ao excluir aula");
     } finally {
       setBusy(false);
     }
@@ -139,6 +182,46 @@ export default function LessonDetailPage() {
               <Button onClick={handleOpenClose} disabled={busy} size="sm">
                 {lesson.isOpen ? "Fechar aula" : "Abrir aula"}
               </Button>
+              <Button
+                onClick={handleDelete}
+                disabled={busy}
+                variant="outline"
+                size="sm"
+              >
+                Excluir
+              </Button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {editMsg && (
+                <div className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                  {editMsg}
+                </div>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm mb-1">Nome da aula</label>
+                  <input
+                    type="text"
+                    className="w-full rounded border px-3 py-2"
+                    value={subjectEdit}
+                    onChange={(e) => setSubjectEdit(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Sala</label>
+                  <input
+                    type="text"
+                    className="w-full rounded border px-3 py-2"
+                    value={roomEdit}
+                    onChange={(e) => setRoomEdit(e.target.value)}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Button onClick={handleSaveEdits} disabled={busy}>
+                    Salvar alterações
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -155,13 +238,13 @@ export default function LessonDetailPage() {
         ) : (
           <div className="space-y-2">
             {students.map((st) => (
-              <Card key={st.id}>
+              <Card key={st.student.id}>
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-medium">{st.name}</div>
+                      <div className="font-medium">{st.student.name}</div>
                       <div className="text-sm text-gray-600">
-                        {st.tagId ? `TAG: ${st.tagId}` : ""}
+                        {st.student.tagId ? `TAG: ${st.student.tagId}` : ""}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
