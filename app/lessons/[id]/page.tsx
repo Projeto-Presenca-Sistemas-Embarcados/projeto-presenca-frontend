@@ -75,7 +75,9 @@ export default function LessonDetailPage() {
       lines.push(row.join(","));
     }
     const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    // Prepend UTF-8 BOM to ensure Excel and other tools detect encoding correctly
+    const bom = "\uFEFF";
+    const blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
