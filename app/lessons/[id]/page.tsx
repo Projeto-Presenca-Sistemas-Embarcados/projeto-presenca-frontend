@@ -37,6 +37,7 @@ export default function LessonDetailPage() {
   const [editMsg, setEditMsg] = useState<string | null>(null);
   const [subjectEdit, setSubjectEdit] = useState("");
   const [roomEdit, setRoomEdit] = useState("");
+  const [showEdit, setShowEdit] = useState(false);
 
   useEffect(() => {
     if (!lessonId || Number.isNaN(lessonId)) return;
@@ -183,46 +184,54 @@ export default function LessonDetailPage() {
                 {lesson.isOpen ? "Fechar aula" : "Abrir aula"}
               </Button>
               <Button
-                onClick={handleDelete}
-                disabled={busy}
+                onClick={() => setShowEdit((v) => !v)}
                 variant="outline"
                 size="sm"
               >
-                Excluir
+                {showEdit ? "Fechar edição" : "Editar"}
               </Button>
             </div>
-            <div className="mt-4 space-y-2">
-              {editMsg && (
-                <div className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
-                  {editMsg}
-                </div>
-              )}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm mb-1">Nome da aula</label>
-                  <input
-                    type="text"
-                    className="w-full rounded border px-3 py-2"
-                    value={subjectEdit}
-                    onChange={(e) => setSubjectEdit(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">Sala</label>
-                  <input
-                    type="text"
-                    className="w-full rounded border px-3 py-2"
-                    value={roomEdit}
-                    onChange={(e) => setRoomEdit(e.target.value)}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Button onClick={handleSaveEdits} disabled={busy}>
-                    Salvar alterações
-                  </Button>
+            {showEdit && (
+              <div className="mt-4 space-y-2">
+                {editMsg && (
+                  <div className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                    {editMsg}
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm mb-1">Nome da aula</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border px-3 py-2"
+                      value={subjectEdit}
+                      onChange={(e) => setSubjectEdit(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1">Sala</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border px-3 py-2"
+                      value={roomEdit}
+                      onChange={(e) => setRoomEdit(e.target.value)}
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex items-center gap-2">
+                    <Button onClick={handleSaveEdits} disabled={busy}>
+                      Salvar alterações
+                    </Button>
+                    <Button
+                      onClick={handleDelete}
+                      disabled={busy}
+                      variant="outline"
+                    >
+                      Excluir aula
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}
