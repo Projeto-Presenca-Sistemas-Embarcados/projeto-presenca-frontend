@@ -212,3 +212,33 @@ export async function removeStudentFromLesson(
     method: "DELETE",
   });
 }
+
+// Logs de presença
+export type AttendanceLog = {
+  id: string;
+  lessonId: number;
+  studentId: number;
+  studentName: string;
+  tagId: string;
+  room: string;
+  esp32Id: string;
+  success: boolean;
+  message: string;
+  timestamp: string;
+};
+
+export async function getLessonLogs(
+  lessonId: number
+): Promise<AttendanceLog[]> {
+  return request<AttendanceLog[]>(`/lessons/${lessonId}/logs`, {
+    method: "GET",
+  });
+}
+
+export async function clearLessonLogs(
+  lessonId: number
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/lessons/${lessonId}/logs`, {
+    method: "DELETE",
+  });
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,17 +11,19 @@ import {
   markAttendance,
   updateLesson,
   deleteLesson,
+  clearLessonLogs,
   type Lesson,
   type LessonStudent,
 } from "../../../lib/api";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/use-auth";
 import { Card, CardContent } from "../../../components/ui/card";
-// Button not used directly here; used within child components
 import LessonHeaderCard from "../../../components/lessons/LessonHeaderCard";
 import LessonEditForm from "../../../components/lessons/LessonEditForm";
 import AttendanceList from "../../../components/lessons/AttendanceList";
 import AttendanceExportButton from "../../../components/lessons/AttendanceExportButton";
+import AttendanceLogs from "../../../components/lessons/AttendanceLogs";
+import Button from "../../../components/ui/button";
 
 export default function LessonDetailPage() {
   const { session, loading, error } = useAuth(true);
@@ -40,6 +42,8 @@ export default function LessonDetailPage() {
   const [subjectEdit, setSubjectEdit] = useState("");
   const [roomEdit, setRoomEdit] = useState("");
   const [showEdit, setShowEdit] = useState(false);
+  const [logsRefreshKey, setLogsRefreshKey] = useState(0); // Key para forçar recarregamento dos logs
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   // CSV export moved into AttendanceExportButton component
 
@@ -73,6 +77,9 @@ export default function LessonDetailPage() {
       } else {
         await openLesson(lesson.id);
         setLesson({ ...lesson, opened: true });
+        // Recarregar lista de alunos quando abrir a aula
+        const students = await getLessonStudents(lesson.id);
+        setLessonStudents(students);
       }
     } catch (e) {
       setFetchError(
@@ -82,6 +89,16 @@ export default function LessonDetailPage() {
       setBusy(false);
     }
   }
+
+  const refreshStudents = useCallback(async () => {
+    if (!lessonId) return;
+    try {
+      const students = await getLessonStudents(lessonId);
+      setLessonStudents(students);
+    } catch (e) {
+      console.error("Erro ao recarregar alunos:", e);
+    }
+  }, [lessonId]);
 
   async function handleSaveEdits() {
     if (!lesson) return;
@@ -120,7 +137,8 @@ export default function LessonDetailPage() {
   async function togglePresence(ls: LessonStudent) {
     if (!lesson) return;
     const newValue = !ls.present;
-    // optimistic update by nested student id
+    
+    // Optimistic update
     setLessonStudents(
       (prev) =>
         prev?.map((s) =>
@@ -129,8 +147,10 @@ export default function LessonDetailPage() {
     );
     try {
       await markAttendance(lesson.id, ls.student.id, newValue);
+      // Forçar recarregamento dos logs quando presença é alterada
+      setLogsRefreshKey(prev => prev + 1);
     } catch (e) {
-      // rollback using the same identity (nested student id)
+      // Rollback on error
       setLessonStudents(
         (prev) =>
           prev?.map((s) =>
@@ -189,6 +209,44 @@ export default function LessonDetailPage() {
         </div>
         <AttendanceList items={lessonStudents} onToggle={togglePresence} />
       </section>
+
+      {/* Logs de presença em tempo real - só mostra se a aula estiver aberta */}
+      {lesson && lesson.opened && (
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-medium">Logs de Presença</h2>
+            <Button
+              onClick={async () => {
+                if (!window.confirm("Tem certeza que deseja apagar todos os logs de presença desta aula?")) {
+                  return;
+                }
+                setClearingLogs(true);
+                try {
+                  await clearLessonLogs(lesson.id);
+                  setLogsRefreshKey(prev => prev + 1);
+                } catch (error) {
+                  console.error("Erro ao apagar logs:", error);
+                  alert("Erro ao apagar logs. Tente novamente.");
+                } finally {
+                  setClearingLogs(false);
+                }
+              }}
+              disabled={clearingLogs}
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              {clearingLogs ? "Apagando..." : "Apagar Logs"}
+            </Button>
+          </div>
+          <AttendanceLogs
+            key={logsRefreshKey} // Força remontagem quando logsRefreshKey muda
+            lessonId={lesson.id}
+            enabled={lesson.opened}
+            onNewLog={refreshStudents}
+          />
+        </section>
+      )}
 
       {showEdit && (
         <LessonEditForm
